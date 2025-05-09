@@ -1,0 +1,1384 @@
+--[[
+    EnemySagaLib - Roblox UI Library
+
+    A modern UI library for creating script hubs in Roblox
+    Inspired by NETA Edition UI design
+]]
+
+local EnemySagaLib = {}
+EnemySagaLib.__index = EnemySagaLib
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Constants
+local PLAYER = Players.LocalPlayer
+local MOUSE = PLAYER:GetMouse()
+
+-- UI Settings
+local THEME = {
+    Background = Color3.fromRGB(25, 25, 25),
+    Accent = Color3.fromRGB(0, 255, 128),
+    DarkAccent = Color3.fromRGB(0, 200, 100),
+    LightText = Color3.fromRGB(240, 240, 240),
+    DarkText = Color3.fromRGB(150, 150, 150),
+    TabBackground = Color3.fromRGB(30, 30, 30),
+    ElementBackground = Color3.fromRGB(40, 40, 40),
+    ElementBackgroundHover = Color3.fromRGB(45, 45, 45),
+    StatusRed = Color3.fromRGB(255, 75, 75),
+    StatusGreen = Color3.fromRGB(75, 255, 75),
+}
+
+-- Utility Functions
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for k, v in pairs(properties or {}) do
+        instance[k] = v
+    end
+    return instance
+end
+
+local function Tween(instance, properties, duration, style, direction)
+    style = style or Enum.EasingStyle.Quad
+    direction = direction or Enum.EasingDirection.Out
+
+    local tween = TweenService:Create(
+        instance,
+        TweenInfo.new(duration, style, direction),
+        properties
+    )
+    tween:Play()
+    return tween
+end
+
+local function DragObject(gui)
+    local dragging, dragInput, dragStart, startPos
+
+    local function Update(input)
+        local delta = input.Position - dragStart
+        gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            Update(input)
+        end
+    end)
+end
+
+-- Main Library Functions
+function EnemySagaLib.new(hubName, subtitle)
+    local library = setmetatable({
+        Name = hubName or "Alchemy Hub",
+        Subtitle = subtitle or "",
+        Tabs = {},
+        Elements = {},
+        Toggles = {},
+        CurrentTab = nil,
+        GUI = nil
+    }, EnemySagaLib)
+
+    library:CreateMainGUI()
+    return library
+end
+
+function EnemySagaLib:CreateMainGUI()
+    -- Create ScreenGui
+    local alchemy = CreateInstance("ScreenGui", {
+        Name = "AlchemyHub",
+        Parent = CoreGui,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false
+    })
+
+    -- Main Frame
+    local main = CreateInstance("Frame", {
+        Name = "Main",
+        Parent = alchemy,
+        BackgroundColor3 = THEME.Background,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -300, 0.5, -175),
+        Size = UDim2.new(0, 600, 0, 350),
+        ClipsDescendants = true
+    })
+
+    -- Add Corner
+    local corner = CreateInstance("UICorner", {
+        Parent = main,
+        CornerRadius = UDim.new(0, 6)
+    })
+
+    -- Add Shadow
+    local shadow = CreateInstance("ImageLabel", {
+        Name = "Shadow",
+        Parent = main,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, -15, 0, -15),
+        Size = UDim2.new(1, 30, 1, 30),
+        ZIndex = 0,
+        Image = "rbxassetid://5554236805",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(23, 23, 277, 277)
+    })
+
+    -- Header
+    local header = CreateInstance("Frame", {
+        Name = "Header",
+        Parent = main,
+        BackgroundColor3 = THEME.Background,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 30)
+    })
+
+    -- Title
+    local title = CreateInstance("TextLabel", {
+        Name = "Title",
+        Parent = header,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = self.Name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Subtitle
+    local subtitle = CreateInstance("TextLabel", {
+        Name = "Subtitle",
+        Parent = header,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0.7, 0),
+        Size = UDim2.new(0.5, 0, 0.3, 0),
+        Font = Enum.Font.Gotham,
+        Text = self.Subtitle,
+        TextColor3 = THEME.DarkText,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Close Button
+    local closeBtn = CreateInstance("TextButton", {
+        Name = "CloseButton",
+        Parent = header,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -25, 0, 5),
+        Size = UDim2.new(0, 20, 0, 20),
+        Font = Enum.Font.GothamBold,
+        Text = "×",
+        TextColor3 = THEME.LightText,
+        TextSize = 20
+    })
+
+    closeBtn.MouseButton1Click:Connect(function()
+        alchemy:Destroy()
+    end)
+
+    -- Tabs Container
+    local tabContainer = CreateInstance("Frame", {
+        Name = "TabContainer",
+        Parent = main,
+        BackgroundColor3 = THEME.TabBackground,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 30),
+        Size = UDim2.new(0, 150, 1, -30)
+    })
+
+    local tabList = CreateInstance("ScrollingFrame", {
+        Name = "TabList",
+        Parent = tabContainer,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 10),
+        Size = UDim2.new(1, 0, 1, -10),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = THEME.Accent,
+        BorderSizePixel = 0,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y
+    })
+
+    local tabListLayout = CreateInstance("UIListLayout", {
+        Parent = tabList,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 5)
+    })
+
+    local tabListPadding = CreateInstance("UIPadding", {
+        Parent = tabList,
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10)
+    })
+
+    -- Content Container
+    local contentContainer = CreateInstance("Frame", {
+        Name = "ContentContainer",
+        Parent = main,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 150, 0, 30),
+        Size = UDim2.new(1, -150, 1, -30)
+    })
+
+    -- Make the window draggable
+    DragObject(main)
+
+    self.GUI = {
+        ScreenGui = alchemy,
+        Main = main,
+        TabContainer = tabContainer,
+        TabList = tabList,
+        ContentContainer = contentContainer
+    }
+end
+
+function EnemySagaLib:CreateTab(name, icon)
+    local tabIndex = #self.Tabs + 1
+
+    -- Create Tab Button
+    local tabButton = CreateInstance("TextButton", {
+        Name = name .. "Tab",
+        Parent = self.GUI.TabList,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 40),
+        Font = Enum.Font.Gotham,
+        Text = "",
+        AutoButtonColor = false
+    })
+
+    -- Add Corner to Tab Button
+    CreateInstance("UICorner", {
+        Parent = tabButton,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Tab Icon (if provided)
+    if icon then
+        local iconImage = CreateInstance("ImageLabel", {
+            Name = "Icon",
+            Parent = tabButton,
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 10, 0.5, -10),
+            Size = UDim2.new(0, 20, 0, 20),
+            Image = icon,
+            ImageColor3 = THEME.DarkText
+        })
+    end
+
+    -- Tab Name
+    local tabName = CreateInstance("TextLabel", {
+        Name = "TabName",
+        Parent = tabButton,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, icon and 40 or 15, 0, 0),
+        Size = UDim2.new(1, icon and -50 or -15, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.DarkText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Tab Content
+    local tabContent = CreateInstance("ScrollingFrame", {
+        Name = name .. "Content",
+        Parent = self.GUI.ContentContainer,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = THEME.Accent,
+        Visible = false,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y
+    })
+
+    -- Add Layout for Tab Content
+    local contentLayout = CreateInstance("UIListLayout", {
+        Parent = tabContent,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 10)
+    })
+
+    local contentPadding = CreateInstance("UIPadding", {
+        Parent = tabContent,
+        PaddingLeft = UDim.new(0, 15),
+        PaddingRight = UDim.new(0, 15),
+        PaddingTop = UDim.new(0, 15),
+        PaddingBottom = UDim.new(0, 15)
+    })
+
+    -- Tab Data
+    local tab = {
+        Name = name,
+        Button = tabButton,
+        Content = tabContent,
+        Elements = {}
+    }
+
+    -- Tab Button Click Event
+    tabButton.MouseButton1Click:Connect(function()
+        self:SelectTab(name)
+    end)
+
+    -- Hover Effects
+    tabButton.MouseEnter:Connect(function()
+        if self.CurrentTab ~= name then
+            Tween(tabButton, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+            Tween(tabName, {TextColor3 = THEME.LightText}, 0.2)
+        end
+    end)
+
+    tabButton.MouseLeave:Connect(function()
+        if self.CurrentTab ~= name then
+            Tween(tabButton, {BackgroundColor3 = THEME.ElementBackground}, 0.2)
+            Tween(tabName, {TextColor3 = THEME.DarkText}, 0.2)
+        end
+    end)
+
+    -- Add Tab to Library
+    table.insert(self.Tabs, tab)
+
+    -- Select First Tab Automatically
+    if tabIndex == 1 then
+        self:SelectTab(name)
+    end
+
+    -- Return Tab for Chaining
+    return tab
+end
+
+function EnemySagaLib:SelectTab(tabName)
+    for _, tab in pairs(self.Tabs) do
+        local isSelected = (tab.Name == tabName)
+
+        -- Update Tab Button
+        Tween(tab.Button, {BackgroundColor3 = isSelected and THEME.Accent or THEME.ElementBackground}, 0.2)
+
+        -- Update Tab Name Color
+        local tabNameLabel = tab.Button:FindFirstChild("TabName")
+        if tabNameLabel then
+            Tween(tabNameLabel, {TextColor3 = isSelected and THEME.LightText or THEME.DarkText}, 0.2)
+        end
+
+        -- Update Tab Icon Color
+        local tabIcon = tab.Button:FindFirstChild("Icon")
+        if tabIcon then
+            Tween(tabIcon, {ImageColor3 = isSelected and THEME.LightText or THEME.DarkText}, 0.2)
+        end
+
+        -- Show/Hide Content
+        tab.Content.Visible = isSelected
+    end
+
+    self.CurrentTab = tabName
+end
+
+function EnemySagaLib:CreateSection(tab, name)
+    if type(tab) == "string" then
+        for _, t in pairs(self.Tabs) do
+            if t.Name == tab then
+                tab = t
+                break
+            end
+        end
+    end
+
+    if not tab or not tab.Content then
+        error("Invalid tab specified")
+        return
+    end
+
+    -- Create Section Container
+    local section = CreateInstance("Frame", {
+        Name = name .. "Section",
+        Parent = tab.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 40), -- Will be resized based on content
+        AutomaticSize = Enum.AutomaticSize.Y
+    })
+
+    -- Add Corner to Section
+    CreateInstance("UICorner", {
+        Parent = section,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Section Title
+    local sectionTitle = CreateInstance("TextLabel", {
+        Name = "SectionTitle",
+        Parent = section,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 5),
+        Size = UDim2.new(1, -20, 0, 25),
+        Font = Enum.Font.GothamBold,
+        Text = name,
+        TextColor3 = THEME.Accent,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Section Content
+    local sectionContent = CreateInstance("Frame", {
+        Name = "SectionContent",
+        Parent = section,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 35),
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y
+    })
+
+    -- Add Layout for Section Content
+    local contentLayout = CreateInstance("UIListLayout", {
+        Parent = sectionContent,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8)
+    })
+
+    local contentPadding = CreateInstance("UIPadding", {
+        Parent = sectionContent,
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 10)
+    })
+
+    -- Section Data
+    local sectionData = {
+        Name = name,
+        Container = section,
+        Content = sectionContent,
+        Elements = {}
+    }
+
+    -- Add Section to Tab
+    table.insert(tab.Elements, sectionData)
+
+    -- Return Section for Chaining
+    return sectionData
+end
+
+function EnemySagaLib:CreateButton(section, name, callback)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Create Button Container
+    local button = CreateInstance("Frame", {
+        Name = name .. "Button",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 35)
+    })
+
+    -- Add Corner to Button
+    CreateInstance("UICorner", {
+        Parent = button,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Button Label
+    local buttonLabel = CreateInstance("TextLabel", {
+        Name = "ButtonLabel",
+        Parent = button,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Button Clickable Area
+    local buttonClick = CreateInstance("TextButton", {
+        Name = "ButtonClick",
+        Parent = button,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = "",
+        AutoButtonColor = false
+    })
+
+    -- Button Click Event
+    buttonClick.MouseButton1Click:Connect(function()
+        Tween(button, {BackgroundColor3 = THEME.Accent}, 0.1)
+
+        task.spawn(function()
+            callback()
+        end)
+
+        task.wait(0.1)
+        Tween(button, {BackgroundColor3 = THEME.ElementBackground}, 0.1)
+    end)
+
+    -- Hover Effects
+    buttonClick.MouseEnter:Connect(function()
+        Tween(button, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+    end)
+
+    buttonClick.MouseLeave:Connect(function()
+        Tween(button, {BackgroundColor3 = THEME.ElementBackground}, 0.2)
+    end)
+
+    -- Button Data
+    local buttonData = {
+        Name = name,
+        Container = button,
+        Callback = callback
+    }
+
+    -- Add Button to Section
+    table.insert(section.Elements, buttonData)
+
+    -- Return Button for Chaining
+    return buttonData
+end
+
+function EnemySagaLib:CreateToggle(section, name, default, callback)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Create Toggle Container
+    local toggle = CreateInstance("Frame", {
+        Name = name .. "Toggle",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 35)
+    })
+
+    -- Add Corner to Toggle
+    CreateInstance("UICorner", {
+        Parent = toggle,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Toggle Label
+    local toggleLabel = CreateInstance("TextLabel", {
+        Name = "ToggleLabel",
+        Parent = toggle,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -60, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Toggle Indicator Background
+    local toggleIndicator = CreateInstance("Frame", {
+        Name = "ToggleIndicator",
+        Parent = toggle,
+        BackgroundColor3 = default and THEME.Accent or THEME.ElementBackgroundHover,
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -45, 0.5, -10),
+        Size = UDim2.new(0, 35, 0, 20)
+    })
+
+    -- Add Corner to Toggle Indicator
+    CreateInstance("UICorner", {
+        Parent = toggleIndicator,
+        CornerRadius = UDim.new(1, 0)
+    })
+
+    -- Toggle Knob
+    local toggleKnob = CreateInstance("Frame", {
+        Name = "ToggleKnob",
+        Parent = toggleIndicator,
+        BackgroundColor3 = THEME.LightText,
+        BorderSizePixel = 0,
+        Position = UDim2.new(default and 0.5 or 0, default and -8 or 2, 0.5, -8),
+        Size = UDim2.new(0, 16, 0, 16)
+    })
+
+    -- Add Corner to Toggle Knob
+    CreateInstance("UICorner", {
+        Parent = toggleKnob,
+        CornerRadius = UDim.new(1, 0)
+    })
+
+    -- Toggle Clickable Area
+    local toggleClick = CreateInstance("TextButton", {
+        Name = "ToggleClick",
+        Parent = toggle,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = "",
+        AutoButtonColor = false
+    })
+
+    -- Toggle State
+    local enabled = default or false
+
+    -- Toggle Function
+    local function updateToggle()
+        enabled = not enabled
+
+        -- Update Toggle Indicator
+        Tween(toggleIndicator, {BackgroundColor3 = enabled and THEME.Accent or THEME.ElementBackgroundHover}, 0.2)
+
+        -- Update Toggle Knob Position
+        Tween(toggleKnob, {Position = UDim2.new(enabled and 0.5 or 0, enabled and -8 or 2, 0.5, -8)}, 0.2)
+
+        -- Call Callback
+        task.spawn(function()
+            callback(enabled)
+        end)
+    end
+
+    -- Toggle Click Event
+    toggleClick.MouseButton1Click:Connect(updateToggle)
+
+    -- Hover Effects
+    toggleClick.MouseEnter:Connect(function()
+        Tween(toggle, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+    end)
+
+    toggleClick.MouseLeave:Connect(function()
+        Tween(toggle, {BackgroundColor3 = THEME.ElementBackground}, 0.2)
+    end)
+
+    -- Toggle Data
+    local toggleData = {
+        Name = name,
+        Container = toggle,
+        Enabled = enabled,
+        SetValue = function(value)
+            if value ~= enabled then
+                updateToggle()
+            end
+        end
+    }
+
+    -- Add Toggle to Section and Library
+    table.insert(section.Elements, toggleData)
+    self.Toggles[name] = toggleData
+
+    -- Return Toggle for Chaining
+    return toggleData
+end
+
+function EnemySagaLib:CreateDropdown(section, name, options, default, callback)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Create Dropdown Container
+    local dropdown = CreateInstance("Frame", {
+        Name = name .. "Dropdown",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 35),
+        ClipsDescendants = true
+    })
+
+    -- Add Corner to Dropdown
+    CreateInstance("UICorner", {
+        Parent = dropdown,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Dropdown Label
+    local dropdownLabel = CreateInstance("TextLabel", {
+        Name = "DropdownLabel",
+        Parent = dropdown,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 0, 35),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Selected Value
+    local selectedValue = CreateInstance("TextLabel", {
+        Name = "SelectedValue",
+        Parent = dropdown,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 35),
+        Size = UDim2.new(1, -20, 0, 25),
+        Font = Enum.Font.Gotham,
+        Text = default or "Select...",
+        TextColor3 = THEME.Accent,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Dropdown Arrow
+    local dropdownArrow = CreateInstance("TextLabel", {
+        Name = "DropdownArrow",
+        Parent = dropdown,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -25, 0, 5),
+        Size = UDim2.new(0, 20, 0, 20),
+        Font = Enum.Font.GothamBold,
+        Text = "▼",
+        TextColor3 = THEME.DarkText,
+        TextSize = 14
+    })
+
+    -- Dropdown Options Container
+    local optionsContainer = CreateInstance("Frame", {
+        Name = "OptionsContainer",
+        Parent = dropdown,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 60),
+        Size = UDim2.new(1, 0, 0, 0), -- Will be resized based on options
+        Visible = false
+    })
+
+    -- Add Layout for Options
+    local optionsLayout = CreateInstance("UIListLayout", {
+        Parent = optionsContainer,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 5)
+    })
+
+    -- Dropdown Clickable Area
+    local dropdownClick = CreateInstance("TextButton", {
+        Name = "DropdownClick",
+        Parent = dropdown,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 35),
+        Text = "",
+        AutoButtonColor = false
+    })
+
+    -- Dropdown State
+    local open = false
+    local selected = default
+
+    -- Create Options
+    local optionButtons = {}
+    for i, option in ipairs(options) do
+        local optionButton = CreateInstance("TextButton", {
+            Name = option .. "Option",
+            Parent = optionsContainer,
+            BackgroundColor3 = THEME.ElementBackgroundHover,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -10, 0, 25),
+            Position = UDim2.new(0, 5, 0, 0),
+            Font = Enum.Font.Gotham,
+            Text = option,
+            TextColor3 = option == selected and THEME.Accent or THEME.LightText,
+            TextSize = 14,
+            AutoButtonColor = false
+        })
+
+        -- Add Corner to Option
+        CreateInstance("UICorner", {
+            Parent = optionButton,
+            CornerRadius = UDim.new(0, 4)
+        })
+
+        -- Option Click Event
+        optionButton.MouseButton1Click:Connect(function()
+            selected = option
+            selectedValue.Text = option
+
+            -- Update Option Colors
+            for _, btn in pairs(optionButtons) do
+                Tween(btn, {TextColor3 = btn.Text == selected and THEME.Accent or THEME.LightText}, 0.2)
+            end
+
+            -- Close Dropdown
+            open = false
+            Tween(dropdown, {Size = UDim2.new(1, 0, 0, 60)}, 0.2)
+            Tween(dropdownArrow, {Rotation = 0}, 0.2)
+            task.wait(0.2)
+            optionsContainer.Visible = false
+
+            -- Call Callback
+            task.spawn(function()
+                callback(selected)
+            end)
+        end)
+
+        -- Hover Effects
+        optionButton.MouseEnter:Connect(function()
+            if option ~= selected then
+                Tween(optionButton, {TextColor3 = THEME.Accent}, 0.2)
+            end
+        end)
+
+        optionButton.MouseLeave:Connect(function()
+            if option ~= selected then
+                Tween(optionButton, {TextColor3 = THEME.LightText}, 0.2)
+            end
+        end)
+
+        table.insert(optionButtons, optionButton)
+    end
+
+    -- Calculate Options Container Size
+    local optionsSize = #options * 30 -- 25 for each option + 5 padding
+
+    -- Toggle Dropdown
+    dropdownClick.MouseButton1Click:Connect(function()
+        open = not open
+
+        if open then
+            optionsContainer.Visible = true
+            Tween(dropdown, {Size = UDim2.new(1, 0, 0, 60 + optionsSize)}, 0.2)
+            Tween(dropdownArrow, {Rotation = 180}, 0.2)
+        else
+            Tween(dropdown, {Size = UDim2.new(1, 0, 0, 60)}, 0.2)
+            Tween(dropdownArrow, {Rotation = 0}, 0.2)
+            task.wait(0.2)
+            optionsContainer.Visible = false
+        end
+    end)
+
+    -- Hover Effects
+    dropdownClick.MouseEnter:Connect(function()
+        Tween(dropdown, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+    end)
+
+    dropdownClick.MouseLeave:Connect(function()
+        Tween(dropdown, {BackgroundColor3 = THEME.ElementBackground}, 0.2)
+    end)
+
+    -- Dropdown Data
+    local dropdownData = {
+        Name = name,
+        Container = dropdown,
+        Selected = selected,
+        SetValue = function(value)
+            if table.find(options, value) and value ~= selected then
+                selected = value
+                selectedValue.Text = value
+
+                -- Update Option Colors
+                for _, btn in pairs(optionButtons) do
+                    btn.TextColor3 = btn.Text == selected and THEME.Accent or THEME.LightText
+                end
+
+                -- Call Callback
+                task.spawn(function()
+                    callback(selected)
+                end)
+            end
+        end
+    }
+
+    -- Add Dropdown to Section
+    table.insert(section.Elements, dropdownData)
+
+    -- Return Dropdown for Chaining
+    return dropdownData
+end
+
+function EnemySagaLib:CreateSlider(section, name, min, max, default, suffix, decimals, callback)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Default Values
+    min = min or 0
+    max = max or 100
+    default = default or min
+    suffix = suffix or ""
+    decimals = decimals or 0
+
+    -- Create Slider Container
+    local slider = CreateInstance("Frame", {
+        Name = name .. "Slider",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 50)
+    })
+
+    -- Add Corner to Slider
+    CreateInstance("UICorner", {
+        Parent = slider,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Slider Label
+    local sliderLabel = CreateInstance("TextLabel", {
+        Name = "SliderLabel",
+        Parent = slider,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 0, 25),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Slider Value
+    local sliderValue = CreateInstance("TextLabel", {
+        Name = "SliderValue",
+        Parent = slider,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -50, 0, 0),
+        Size = UDim2.new(0, 40, 0, 25),
+        Font = Enum.Font.Gotham,
+        Text = tostring(default) .. suffix,
+        TextColor3 = THEME.Accent,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Right
+    })
+
+    -- Slider Background
+    local sliderBg = CreateInstance("Frame", {
+        Name = "SliderBackground",
+        Parent = slider,
+        BackgroundColor3 = THEME.ElementBackgroundHover,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 30),
+        Size = UDim2.new(1, -20, 0, 5)
+    })
+
+    -- Add Corner to Slider Background
+    CreateInstance("UICorner", {
+        Parent = sliderBg,
+        CornerRadius = UDim.new(1, 0)
+    })
+
+    -- Slider Fill
+    local sliderFill = CreateInstance("Frame", {
+        Name = "SliderFill",
+        Parent = sliderBg,
+        BackgroundColor3 = THEME.Accent,
+        BorderSizePixel = 0,
+        Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    })
+
+    -- Add Corner to Slider Fill
+    CreateInstance("UICorner", {
+        Parent = sliderFill,
+        CornerRadius = UDim.new(1, 0)
+    })
+
+    -- Slider Knob
+    local sliderKnob = CreateInstance("Frame", {
+        Name = "SliderKnob",
+        Parent = sliderFill,
+        BackgroundColor3 = THEME.LightText,
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -6, 0.5, -6),
+        Size = UDim2.new(0, 12, 0, 12),
+        ZIndex = 2
+    })
+
+    -- Add Corner to Slider Knob
+    CreateInstance("UICorner", {
+        Parent = sliderKnob,
+        CornerRadius = UDim.new(1, 0)
+    })
+
+    -- Slider Clickable Area
+    local sliderClick = CreateInstance("TextButton", {
+        Name = "SliderClick",
+        Parent = slider,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 25),
+        Size = UDim2.new(1, 0, 0, 25),
+        Text = "",
+        ZIndex = 3
+    })
+
+    -- Slider Value
+    local value = default
+
+    -- Format Value Function
+    local function formatValue(val)
+        if decimals == 0 then
+            return math.floor(val)
+        else
+            local fmt = "%." .. decimals .. "f"
+            return string.format(fmt, val)
+        end
+    end
+
+    -- Update Slider Function
+    local function updateSlider(input)
+        local sizeX = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+        sliderFill.Size = UDim2.new(sizeX, 0, 1, 0)
+
+        -- Calculate Value
+        local newValue = min + ((max - min) * sizeX)
+        value = formatValue(newValue)
+
+        -- Update Value Text
+        sliderValue.Text = value .. suffix
+
+        -- Call Callback
+        task.spawn(function()
+            callback(tonumber(value))
+        end)
+    end
+
+    -- Slider Events
+    sliderClick.MouseButton1Down:Connect(function(input)
+        updateSlider({Position = input})
+
+        local connection
+        connection = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+        end)
+    end)
+
+    -- Hover Effects
+    sliderClick.MouseEnter:Connect(function()
+        Tween(slider, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+    end)
+
+    sliderClick.MouseLeave:Connect(function()
+        Tween(slider, {BackgroundColor3 = THEME.ElementBackground}, 0.2)
+    end)
+
+    -- Slider Data
+    local sliderData = {
+        Name = name,
+        Container = slider,
+        Value = value,
+        SetValue = function(val)
+            val = math.clamp(val, min, max)
+            value = formatValue(val)
+
+            -- Update Slider Fill
+            local sizeX = (val - min) / (max - min)
+            sliderFill.Size = UDim2.new(sizeX, 0, 1, 0)
+
+            -- Update Value Text
+            sliderValue.Text = value .. suffix
+
+            -- Call Callback
+            task.spawn(function()
+                callback(tonumber(value))
+            end)
+        end
+    }
+
+    -- Add Slider to Section
+    table.insert(section.Elements, sliderData)
+
+    -- Return Slider for Chaining
+    return sliderData
+end
+
+function EnemySagaLib:CreateInput(section, name, placeholder, callback)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Create Input Container
+    local input = CreateInstance("Frame", {
+        Name = name .. "Input",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 60)
+    })
+
+    -- Add Corner to Input
+    CreateInstance("UICorner", {
+        Parent = input,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Input Label
+    local inputLabel = CreateInstance("TextLabel", {
+        Name = "InputLabel",
+        Parent = input,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 0, 25),
+        Font = Enum.Font.Gotham,
+        Text = name,
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Input Box Background
+    local inputBoxBg = CreateInstance("Frame", {
+        Name = "InputBoxBackground",
+        Parent = input,
+        BackgroundColor3 = THEME.ElementBackgroundHover,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 30),
+        Size = UDim2.new(1, -20, 0, 25)
+    })
+
+    -- Add Corner to Input Box Background
+    CreateInstance("UICorner", {
+        Parent = inputBoxBg,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Input Box
+    local inputBox = CreateInstance("TextBox", {
+        Name = "InputBox",
+        Parent = inputBoxBg,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(1, -20, 1, 0),
+        Font = Enum.Font.Gotham,
+        PlaceholderText = placeholder or "Type here...",
+        PlaceholderColor3 = THEME.DarkText,
+        Text = "",
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false
+    })
+
+    -- Input Events
+    inputBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local text = inputBox.Text
+
+            -- Call Callback
+            task.spawn(function()
+                callback(text)
+            end)
+        end
+    end)
+
+    -- Hover Effects
+    inputBox.Focused:Connect(function()
+        Tween(inputBoxBg, {BackgroundColor3 = THEME.TabBackground}, 0.2)
+    end)
+
+    inputBox.FocusLost:Connect(function()
+        Tween(inputBoxBg, {BackgroundColor3 = THEME.ElementBackgroundHover}, 0.2)
+    end)
+
+    -- Input Data
+    local inputData = {
+        Name = name,
+        Container = input,
+        Box = inputBox,
+        SetValue = function(text)
+            inputBox.Text = text
+        end,
+        GetValue = function()
+            return inputBox.Text
+        end
+    }
+
+    -- Add Input to Section
+    table.insert(section.Elements, inputData)
+
+    -- Return Input for Chaining
+    return inputData
+end
+
+function EnemySagaLib:CreateStatusIndicator(section, name, options)
+    if type(section) == "string" then
+        for _, tab in pairs(self.Tabs) do
+            for _, s in pairs(tab.Elements) do
+                if s.Name == section then
+                    section = s
+                    break
+                end
+            end
+        end
+    end
+
+    if not section or not section.Content then
+        error("Invalid section specified")
+        return
+    end
+
+    -- Create Status Container
+    local status = CreateInstance("Frame", {
+        Name = name .. "Status",
+        Parent = section.Content,
+        BackgroundColor3 = THEME.ElementBackground,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 35)
+    })
+
+    -- Add Corner to Status
+    CreateInstance("UICorner", {
+        Parent = status,
+        CornerRadius = UDim.new(0, 4)
+    })
+
+    -- Status Label
+    local statusLabel = CreateInstance("TextLabel", {
+        Name = "StatusLabel",
+        Parent = status,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 10, 0, 0),
+        Size = UDim2.new(0, 200, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = name .. " :",
+        TextColor3 = THEME.LightText,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Status Value
+    local statusValue = CreateInstance("TextLabel", {
+        Name = "StatusValue",
+        Parent = status,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 210, 0, 0),
+        Size = UDim2.new(1, -220, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "Not Set",
+        TextColor3 = THEME.StatusRed,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left
+    })
+
+    -- Status Data
+    local statusData = {
+        Name = name,
+        Container = status,
+        Value = statusValue,
+        SetStatus = function(value, color)
+            statusValue.Text = value
+            if color then
+                statusValue.TextColor3 = color
+            end
+        end,
+        SetSpawn = function(isSpawned)
+            if isSpawned then
+                statusValue.Text = "✓ Spawn"
+                statusValue.TextColor3 = THEME.StatusGreen
+            else
+                statusValue.Text = "✗ Not Spawn"
+                statusValue.TextColor3 = THEME.StatusRed
+            end
+        end
+    }
+
+    -- Set Initial Status if Provided
+    if options then
+        if options.text then
+            statusValue.Text = options.text
+        end
+
+        if options.color then
+            statusValue.TextColor3 = options.color
+        end
+
+        if options.spawn ~= nil then
+            statusData.SetSpawn(options.spawn)
+        end
+    end
+
+    -- Add Status to Section
+    table.insert(section.Elements, statusData)
+
+    -- Return Status for Chaining
+    return statusData
+end
+
+-- Return the library
+return EnemySagaLib
