@@ -1,8 +1,6 @@
 --[[
     EnemySagaLib - Roblox UI Library
-
     A modern UI library for creating script hubs in Roblox
-    Inspired by NETA Edition UI design
 ]]
 
 local EnemySagaLib = {}
